@@ -1,0 +1,8 @@
+venv/
+venv]/
+__pycache__/
+*.py[cod]
+scanner.db
+.pytest_cache/
+.env
+.env.*

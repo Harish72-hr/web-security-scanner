@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onion Scanner — Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --green:      #00ff41;
+            --green-dim:  #00aa2a;
+            --green-dark: #003a0f;
+            --red:        #ff3c3c;
+            --yellow:     #ffd700;
+            --cyan:       #00d4ff;
+            --bg:         #060a06;
+            --card-bg:    rgba(0,20,5,0.92);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+        }
+
+        /* ── Matrix ── */
+        #matrix {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0; opacity: 0.10;
+            pointer-events: none;
+        }
+
+        /* ── Layout ── */
+        .page-wrap {
+            position: relative; z-index: 10;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 20px 80px;
+        }
+
+        /* ── Page header ── */
+        .dash-header {
+            text-align: center;
+            padding: 32px 0 28px;
+            border-bottom: 1px solid var(--green-dark);
+            margin-bottom: 36px;
+        }
+
+        .dash-header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.2rem, 4vw, 2.2rem);
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: var(--green);
+            text-shadow: 0 0 20px var(--green), 0 0 40px var(--green-dim);
+        }
+
+        .dash-header p {
+            color: #555;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+
+        /* ── Cyber card ── */
+        .cyber-card {
+            background: var(--card-bg);
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,255,65,0.05);
+            transition: box-shadow 0.3s;
+            height: 100%;
+        }
+
+        .cyber-card:hover {
+            box-shadow: 0 0 30px rgba(0,255,65,0.13);
+        }
+
+        .cyber-card-header {
+            background: #0a1a0a;
+            border-bottom: 1px solid var(--green-dark);
+            padding: 10px 18px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--green);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cyber-card-body {
+            padding: 20px;
+        }
+
+        /* ── Stat cards ── */
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            padding: 24px 16px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0,255,65,0.05);
+            transition: box-shadow 0.3s, transform 0.3s;
+            height: 100%;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 0 30px rgba(0,255,65,0.15);
+            transform: translateY(-3px);
+        }
+
+        .stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 900;
+            line-height: 1;
+            display: block;
+        }
+
+        .stat-lbl {
+            font-size: 0.68rem;
+            color: #555;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 10px;
+            display: block;
+        }
+
+        .stat-icon {
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .val-green  { color: var(--green);  text-shadow: 0 0 12px var(--green); }
+        .val-cyan   { color: var(--cyan);   text-shadow: 0 0 12px var(--cyan); }
+        .val-yellow { color: var(--yellow); text-shadow: 0 0 12px var(--yellow); }
+        .val-red    { color: var(--red);    text-shadow: 0 0 12px var(--red); }
+
+        /* ── Chart containers — equal height, no overflow ── */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 260px;
+        }
+
+        /* ── Terminal ── */
+        .terminal-wrap {
+            background: #000;
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .terminal-titlebar {
+            background: #0a150a;
+            border-bottom: 1px solid var(--green-dark);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            color: var(--green-dim);
+            letter-spacing: 1px;
+        }
+
+        .tbar-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .terminal-body {
+            padding: 14px 18px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.83rem;
+            line-height: 1.8;
+            color: var(--green);
+        }
+
+        .terminal-body::-webkit-scrollbar { width: 4px; }
+        .terminal-body::-webkit-scrollbar-track { background: #000; }
+        .terminal-body::-webkit-scrollbar-thumb { background: var(--green-dark); }
+
+        .log-info    { color: var(--cyan); }
+        .log-success { color: var(--green); }
+        .log-warn    { color: var(--yellow); }
+        .log-system  { color: #666; }
+
+        /* ── Table ── */
+        .scan-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.83rem;
+        }
+
+        .scan-table th {
+            color: var(--green-dim);
+            font-size: 0.68rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 8px 14px;
+            border-bottom: 1px solid var(--green-dark);
+            font-weight: normal;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .scan-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #0d1a0d;
+            color: #aaa;
+            vertical-align: middle;
+        }
+
+        .scan-table tr:last-child td { border-bottom: none; }
+        .scan-table tr:hover td     { background: #0a150a; }
+
+        .scan-table td:first-child {
+            color: #ccc;
+            word-break: break-all;
+            max-width: 300px;
+        }
+
+        /* ── Badges ── */
+        .badge-cyber {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 2px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            border: 1px solid;
+        }
+
+        .badge-onion  { color: var(--cyan);   border-color: rgba(0,212,255,0.4);  background: rgba(0,212,255,0.08); }
+        .badge-normal { color: var(--green);  border-color: rgba(0,255,65,0.4);   background: rgba(0,255,65,0.08); }
+        .badge-high   { color: var(--red);    border-color: rgba(255,60,60,0.4);  background: rgba(255,60,60,0.08); }
+        .badge-medium { color: var(--yellow); border-color: rgba(255,215,0,0.4);  background: rgba(255,215,0,0.08); }
+        .badge-low    { color: var(--green);  border-color: rgba(0,255,65,0.4);   background: rgba(0,255,65,0.08); }
+
+        /* ── Back button ── */
+        .btn-back {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            padding: 10px 28px;
+            border-radius: 3px;
+            border: 1px solid var(--green);
+            color: var(--green);
+            background: transparent;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: var(--green);
+            color: #000;
+            box-shadow: 0 0 20px var(--green);
+        }
+
+        /* ── Section spacing ── */
+        .section { margin-bottom: 28px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .dash-header h1 { font-size: 1.1rem; letter-spacing: 2px; }
+            .stat-val { font-size: 2rem; }
+        }
+    </style>
+</head>
+
+<body>
+<canvas id="matrix"></canvas>
+
+<div class="page-wrap">
+
+    <!-- Header -->
+    <div class="dash-header">
+        <h1>⬡ ONION SCANNER — CONTROL CENTER</h1>
+        <p>Security Intelligence Dashboard</p>
+    </div>
+
+    <!-- ── Stat cards ── -->
+    <div class="row g-3 section">
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <span class="stat-icon">📡</span>
+                <span class="stat-val val-green">{{ stats.total_scans }}</span>
+                <span class="stat-lbl">Total Scans</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <span class="stat-icon">🧅</span>
+                <span class="stat-val val-cyan">{{ stats.onion_scans }}</span>
+                <span class="stat-lbl">Onion Scans</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <span class="stat-icon">🌐</span>
+                <span class="stat-val val-yellow">{{ stats.normal_scans }}</span>
+                <span class="stat-lbl">Surface Scans</span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <span class="stat-icon">🚨</span>
+                <span class="stat-val val-red">{{ stats.risk_stats.High }}</span>
+                <span class="stat-lbl">High Risk Found</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Charts row ── -->
+    <div class="row g-3 section">
+        <div class="col-md-6">
+            <div class="cyber-card">
+                <div class="cyber-card-header">🥧 Scan Type Distribution</div>
+                <div class="cyber-card-body">
+                    <div class="chart-container">
+                        <canvas id="siteChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="cyber-card">
+                <div class="cyber-card-header">📊 Risk Level Breakdown</div>
+                <div class="cyber-card-body">
+                    <div class="chart-container">
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Terminal ── -->
+    <div class="section">
+        <div class="terminal-wrap">
+            <div class="terminal-titlebar">
+                <span class="tbar-dot" style="background:#ff5f57"></span>
+                <span class="tbar-dot" style="background:#febb2c"></span>
+                <span class="tbar-dot" style="background:#28c840"></span>
+                &nbsp;&nbsp;ONION-SCANNER :: SYSTEM LOGS
+                <span style="margin-left:auto;color:#2a5c2a" id="logStatus">● LIVE</span>
+            </div>
+            <div class="terminal-body" id="terminal"></div>
+        </div>
+    </div>
+
+    <!-- ── Recent Scans table ── -->
+    <div class="section">
+        <div class="cyber-card">
+            <div class="cyber-card-header">📜 Recent Scans</div>
+            <div class="cyber-card-body" style="padding:0">
+                <div style="overflow-x:auto">
+                    <table class="scan-table">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Type</th>
+                                <th>Risk Level</th>
+                                <th>Scan Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scan in recent_scans %}
+                            <tr>
+                                <td>{{ scan[0] }}</td>
+                                <td>
+                                    {% if scan[2] == 1 %}
+                                    <span class="badge-cyber badge-onion">🧅 Onion</span>
+                                    {% else %}
+                                    <span class="badge-cyber badge-normal">🌐 Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan[1] == "High" %}
+                                    <span class="badge-cyber badge-high">High</span>
+                                    {% elif scan[1] == "Medium" %}
+                                    <span class="badge-cyber badge-medium">Medium</span>
+                                    {% else %}
+                                    <span class="badge-cyber badge-low">Low</span>
+                                    {% endif %}
+                                </td>
+                                <td style="white-space:nowrap;color:#555">{{ scan[3] }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% if not recent_scans %}
+                            <tr>
+                                <td colspan="4" style="text-align:center;color:#333;padding:32px">
+                                    No scans recorded yet.
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Back button ── -->
+    <div style="text-align:center; margin-top:16px">
+        <a href="/" class="btn-back">← Back to Scanner</a>
+    </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+// ── Matrix ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById("matrix");
+const ctx    = canvas.getContext("2d");
+const FONT   = 14;
+let drops    = [];
+
+function resizeMatrix() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    drops = Array(Math.floor(canvas.width / FONT)).fill(1);
+}
+resizeMatrix();
+window.addEventListener("resize", resizeMatrix);
+
+const CHARS = "01アイウエオABCDEFGHIJKLMN";
+function drawMatrix() {
+    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#00ff41";
+    ctx.font = FONT + "px monospace";
+    drops.forEach((y, i) => {
+        ctx.fillText(CHARS[Math.floor(Math.random() * CHARS.length)], i * FONT, y * FONT);
+        if (y * FONT > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+    });
+}
+setInterval(drawMatrix, 40);
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            labels: {
+                color: "#aaa",
+                font: { family: "Share Tech Mono", size: 12 },
+                padding: 16
+            }
+        }
+    }
+};
+
+// Pie — scan type
+new Chart(document.getElementById("siteChart"), {
+    type: "doughnut",
+    data: {
+        labels: ["Onion Sites", "Surface Sites"],
+        datasets: [{
+            data: [{{ stats.onion_scans }}, {{ stats.normal_scans }}],
+            backgroundColor: ["rgba(0,212,255,0.7)", "rgba(0,255,65,0.7)"],
+            borderColor:     ["#00d4ff", "#00ff41"],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        ...CHART_DEFAULTS,
+        cutout: "65%"
+    }
+});
+
+// Bar — risk levels
+new Chart(document.getElementById("riskChart"), {
+    type: "bar",
+    data: {
+        labels: ["Low", "Medium", "High"],
+        datasets: [{
+            label: "Scans",
+            data: [
+                {{ stats.risk_stats.Low }},
+                {{ stats.risk_stats.Medium }},
+                {{ stats.risk_stats.High }}
+            ],
+            backgroundColor: [
+                "rgba(0,255,65,0.6)",
+                "rgba(255,215,0,0.6)",
+                "rgba(255,60,60,0.6)"
+            ],
+            borderColor: ["#00ff41","#ffd700","#ff3c3c"],
+            borderWidth: 1,
+            borderRadius: 3
+        }]
+    },
+    options: {
+        ...CHART_DEFAULTS,
+        plugins: {
+            ...CHART_DEFAULTS.plugins,
+            legend: { display: false }
+        },
+        scales: {
+            x: {
+                ticks: { color: "#aaa", font: { family: "Share Tech Mono" } },
+                grid:  { color: "rgba(0,255,65,0.05)" }
+            },
+            y: {
+                ticks: { color: "#aaa", font: { family: "Share Tech Mono" } },
+                grid:  { color: "rgba(0,255,65,0.05)" },
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// ── Terminal logs ─────────────────────────────────────────────────────────────
+const terminal = document.getElementById("terminal");
+
+const logs = [
+    { cls: "log-info",    text: "[INFO]    Loading scanner database..." },
+    { cls: "log-success", text: "[OK]      SQLite connection established." },
+    { cls: "log-info",    text: "[INFO]    Tor SOCKS5 proxy check..." },
+    { cls: "log-success", text: "[OK]      OWASP module initialized." },
+    { cls: "log-info",    text: "[INFO]    Header analysis engine ready." },
+    { cls: "log-success", text: "[OK]      SSL/TLS scanner loaded." },
+    { cls: "log-system",  text: "[SYSTEM]  Monitoring onion services..." },
+    { cls: "log-warn",    text: "[WARN]    Ensure Tor Browser is running for .onion scans." },
+    { cls: "log-success", text: "[OK]      Vulnerability engine standby." },
+    { cls: "log-system",  text: "[SYSTEM]  Waiting for next scan request..." },
+];
+
+let logIdx = 0;
+
+function addLog() {
+    if (logIdx >= logs.length) {
+        logIdx = 0;
+        terminal.innerHTML = "";
+    }
+    const { cls, text } = logs[logIdx++];
+    const line = document.createElement("div");
+    line.className = cls;
+    line.textContent = text;
+    terminal.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+// Stagger initial logs then loop
+logs.forEach((_, i) => setTimeout(addLog, i * 600));
+setInterval(addLog, logs.length * 600 + 1000);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onion Security Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --green:      #00ff41;
+            --green-dim:  #00aa2a;
+            --green-dark: #003a0f;
+            --red:        #ff3c3c;
+            --yellow:     #ffd700;
+            --cyan:       #00d4ff;
+            --bg:         #060a06;
+            --card-bg:    rgba(0,20,5,0.92);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Matrix canvas ── */
+        #matrix {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0; opacity: 0.10; pointer-events: none;
+        }
+
+        .page-wrap {
+            position: relative; z-index: 10;
+            max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px;
+        }
+
+        /* ── Header ── */
+        .site-header {
+            text-align: center;
+            padding: 40px 0 30px;
+            border-bottom: 1px solid var(--green-dim);
+            margin-bottom: 32px;
+        }
+
+        .site-header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.4rem, 5vw, 2.8rem);
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: var(--green);
+            text-shadow: 0 0 20px var(--green), 0 0 40px var(--green-dim);
+            margin: 0 0 10px;
+        }
+
+        .site-header p { color: #aaa; font-size: 0.9rem; margin: 0; }
+
+        .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+
+        .badge-cyber {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            padding: 4px 12px;
+            border: 1px solid;
+            border-radius: 2px;
+            letter-spacing: 1px;
+        }
+
+        .badge-green  { border-color: var(--green);  color: var(--green); }
+        .badge-cyan   { border-color: var(--cyan);   color: var(--cyan); }
+        .badge-yellow { border-color: var(--yellow); color: var(--yellow); }
+
+        /* ── Scan input ── */
+        .scan-box {
+            background: var(--card-bg);
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 0 30px rgba(0,255,65,0.07);
+        }
+
+        .scan-box label {
+            display: block; font-size: 0.8rem;
+            color: var(--green-dim); letter-spacing: 2px;
+            text-transform: uppercase; margin-bottom: 10px;
+        }
+
+        .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .url-input {
+            flex: 1; min-width: 200px;
+            background: #000;
+            border: 1px solid var(--green-dim);
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1rem;
+            padding: 10px 16px;
+            border-radius: 3px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .url-input::placeholder { color: #2a5c2a; }
+        .url-input:focus {
+            border-color: var(--green);
+            box-shadow: 0 0 12px rgba(0,255,65,0.3);
+        }
+
+        .btn-scan {
+            background: transparent;
+            border: 2px solid var(--green);
+            color: var(--green);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            padding: 10px 28px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-scan:hover:not(:disabled) {
+            background: var(--green);
+            color: #000;
+            box-shadow: 0 0 20px var(--green);
+        }
+
+        .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ── Terminal ── */
+        .terminal-wrap {
+            display: none;
+            background: #000;
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .terminal-titlebar {
+            background: #0a150a;
+            border-bottom: 1px solid var(--green-dark);
+            padding: 8px 16px;
+            display: flex; align-items: center; gap: 8px;
+            font-size: 0.75rem; color: var(--green-dim);
+            letter-spacing: 1px;
+        }
+
+        .tbar-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .terminal-body {
+            padding: 16px 20px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.88rem;
+            line-height: 1.7;
+        }
+
+        .t-line { display: flex; align-items: flex-start; gap: 10px; animation: fadein 0.15s ease; }
+        @keyframes fadein { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; } }
+
+        .t-prompt { color: var(--green-dim); flex-shrink: 0; user-select: none; }
+        .t-text   { color: var(--green); flex: 1; }
+        .t-done   .t-text { color: #7fff7f; }
+        .t-error  .t-text { color: var(--red); }
+        .t-warn   .t-text { color: var(--yellow); }
+        .t-skip   .t-text { color: #666; }
+        .t-info   .t-text { color: var(--cyan); }
+
+        .t-spinner { display: inline-block; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .cursor-blink {
+            display: inline-block; width: 8px; height: 1em;
+            background: var(--green); animation: blink 1s step-end infinite;
+            vertical-align: text-bottom; margin-left: 3px;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ── Progress bar ── */
+        .scan-progress {
+            display: none;
+            margin-bottom: 24px;
+        }
+
+        .progress-label {
+            font-size: 0.75rem; color: var(--green-dim);
+            letter-spacing: 2px; text-transform: uppercase;
+            margin-bottom: 6px;
+            display: flex; justify-content: space-between;
+        }
+
+        .progress-track {
+            height: 4px; background: #0a1a0a;
+            border-radius: 2px; overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, var(--green-dim), var(--green));
+            transition: width 0.4s ease;
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* ── Results ── */
+        .results-section { display: none; }
+
+        .cyber-card {
+            background: var(--card-bg);
+            border: 1px solid var(--green-dim);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,255,65,0.05);
+            transition: box-shadow 0.3s;
+        }
+
+        .cyber-card:hover { box-shadow: 0 0 30px rgba(0,255,65,0.12); }
+
+        .cyber-card-header {
+            background: #0a1a0a;
+            border-bottom: 1px solid var(--green-dark);
+            padding: 10px 18px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--green);
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        .cyber-card-body { padding: 18px; }
+
+        /* Summary stats row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin-bottom: 20px; }
+
+        .stat-box {
+            background: #000;
+            border: 1px solid var(--green-dark);
+            border-radius: 3px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-box .stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem; font-weight: 900;
+            line-height: 1; display: block;
+        }
+
+        .stat-box .stat-lbl {
+            font-size: 0.7rem; color: #666;
+            letter-spacing: 2px; text-transform: uppercase;
+            margin-top: 6px; display: block;
+        }
+
+        .val-green  { color: var(--green); text-shadow: 0 0 10px var(--green); }
+        .val-red    { color: var(--red);   text-shadow: 0 0 10px var(--red); }
+        .val-yellow { color: var(--yellow); text-shadow: 0 0 10px var(--yellow); }
+        .val-cyan   { color: var(--cyan);  text-shadow: 0 0 10px var(--cyan); }
+
+        /* Header table */
+        .hdr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .hdr-table th {
+            color: var(--green-dim); font-size: 0.72rem;
+            letter-spacing: 2px; text-transform: uppercase;
+            padding: 6px 12px; border-bottom: 1px solid var(--green-dark);
+            text-align: left; font-weight: normal;
+        }
+        .hdr-table td { padding: 8px 12px; border-bottom: 1px solid #0d1a0d; color: #ccc; }
+        .hdr-table tr:last-child td { border-bottom: none; }
+        .hdr-table tr:hover td { background: #0a150a; }
+
+        .tag-present {
+            display: inline-block; padding: 2px 10px; border-radius: 2px;
+            font-size: 0.72rem; letter-spacing: 1px;
+            background: rgba(0,255,65,0.1); color: var(--green);
+            border: 1px solid var(--green-dim);
+        }
+        .tag-missing {
+            display: inline-block; padding: 2px 10px; border-radius: 2px;
+            font-size: 0.72rem; letter-spacing: 1px;
+            background: rgba(255,60,60,0.1); color: var(--red);
+            border: 1px solid rgba(255,60,60,0.4);
+        }
+        .tag-risk-high   { background: rgba(255,60,60,0.15); color: var(--red); border: 1px solid rgba(255,60,60,0.5); display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .tag-risk-medium { background: rgba(255,215,0,0.12); color: var(--yellow); border: 1px solid rgba(255,215,0,0.4); display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .tag-risk-low    { background: rgba(0,255,65,0.1); color: var(--green); border: 1px solid var(--green-dim); display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .tag-modern      { background: rgba(0,212,255,0.10); color: var(--cyan);   border: 1px solid rgba(0,212,255,0.4); display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .tag-warn        { background: rgba(255,215,0,0.10);  color: var(--yellow); border: 1px solid rgba(255,215,0,0.4);  display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .tag-na          { background: rgba(100,100,100,0.10); color: #666;           border: 1px solid #333;                display:inline-block; padding:2px 10px; border-radius:2px; font-size:0.72rem; }
+        .redirect-notice { background: rgba(255,215,0,0.06); border: 1px solid rgba(255,215,0,0.25); border-radius:3px; padding:8px 14px; font-size:0.78rem; color:var(--yellow); margin-bottom:14px; }
+
+        /* Finding lists */
+        .finding-list { list-style: none; padding: 0; margin: 0; }
+        .finding-list li {
+            padding: 8px 12px;
+            border-bottom: 1px solid #0d1a0d;
+            font-size: 0.83rem; color: #bbb;
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .finding-list li:last-child { border-bottom: none; }
+        .finding-list li::before { content: "›"; color: var(--green-dim); flex-shrink: 0; }
+        .finding-list li.vuln-info   { color: var(--cyan); }
+        .finding-list li.vuln-warn   { color: var(--yellow); }
+        .finding-list li.vuln-danger { color: var(--red); }
+        .finding-list li.vuln-ok     { color: var(--green); }
+
+        /* Port table */
+        .port-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .port-table th { color: var(--green-dim); font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; padding: 6px 12px; border-bottom: 1px solid var(--green-dark); text-align: left; font-weight: normal; }
+        .port-table td { padding: 8px 12px; border-bottom: 1px solid #0d1a0d; color: #ccc; }
+        .port-table tr:hover td { background: #0a150a; }
+        .port-num { color: var(--green); font-weight: bold; }
+
+        /* Chart */
+        .chart-wrap { max-width: 280px; margin: 0 auto; }
+
+        /* Action buttons */
+        .action-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+        .btn-action {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem; font-weight: 700;
+            letter-spacing: 1px; padding: 10px 22px;
+            border-radius: 3px; border: 1px solid;
+            cursor: pointer; transition: all 0.2s;
+            text-decoration: none; display: inline-block;
+        }
+
+        .btn-dl {
+            border-color: var(--green); color: var(--green); background: transparent;
+        }
+        .btn-dl:hover { background: var(--green); color: #000; box-shadow: 0 0 16px var(--green); }
+
+        .btn-dash {
+            border-color: var(--cyan); color: var(--cyan); background: transparent;
+        }
+        .btn-dash:hover { background: var(--cyan); color: #000; box-shadow: 0 0 16px var(--cyan); }
+
+        .btn-rescan {
+            border-color: var(--yellow); color: var(--yellow); background: transparent;
+        }
+        .btn-rescan:hover { background: var(--yellow); color: #000; box-shadow: 0 0 16px var(--yellow); }
+
+        /* Recent scans */
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-list li {
+            padding: 7px 12px; border-bottom: 1px solid #0d1a0d;
+            font-size: 0.82rem; color: #888;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .history-list li:last-child { border-bottom: none; }
+        .history-list li::before { content: "⌛"; font-size: 0.7rem; }
+
+        /* Onion badge */
+        .onion-banner {
+            background: rgba(0,212,255,0.07);
+            border: 1px solid rgba(0,212,255,0.3);
+            border-radius: 3px;
+            padding: 10px 16px;
+            font-size: 0.82rem;
+            color: var(--cyan);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .site-header h1 { font-size: 1.3rem; letter-spacing: 2px; }
+            .input-row { flex-direction: column; }
+            .btn-scan { width: 100%; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: var(--green-dark); }
+    </style>
+</head>
+<body>
+<canvas id="matrix"></canvas>
+
+<div class="page-wrap">
+
+    <!-- Header -->
+    <div class="site-header">
+        <h1> ONION SECURITY SCANNER</h1>
+        <p>Advanced Security Analysis for Surface Web &amp; Tor Hidden Services</p>
+        <div class="badges">
+            <span class="badge-cyber badge-green">OWASP TOP 10</span>
+            <span class="badge-cyber badge-cyan">TOR ENABLED</span>
+            <span class="badge-cyber badge-yellow">PDF REPORTS</span>
+        </div>
+    </div>
+
+    <!-- Scan Input -->
+    <div class="scan-box">
+        <label>// TARGET URL</label>
+        <div class="input-row">
+            <input type="text" id="urlInput" class="url-input"
+                   placeholder="https://example.com  or  http://example.onion">
+            <button class="btn-scan" id="scanBtn" onclick="startScan()">
+                ▶ INITIATE SCAN
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="scan-progress" id="scanProgress">
+        <div class="progress-label">
+            <span id="progressLabel">INITIALIZING...</span>
+            <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="terminal-wrap" id="terminalWrap">
+        <div class="terminal-titlebar">
+            <span class="tbar-dot" style="background:#ff5f57"></span>
+            <span class="tbar-dot" style="background:#febb2c"></span>
+            <span class="tbar-dot" style="background:#28c840"></span>
+            &nbsp;&nbsp;ONION-SCANNER :: LIVE OUTPUT
+            <span style="margin-left:auto" id="torStatus"></span>
+        </div>
+        <div class="terminal-body" id="terminalBody">
+            <div class="t-line t-info">
+                <span class="t-prompt">$</span>
+                <span class="t-text">Onion Security Scanner v2.0 — ready<span class="cursor-blink"></span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onion notice -->
+    <div class="onion-banner" id="onionBanner">
+         <strong>Tor Hidden Service detected.</strong> Routing all requests through Tor. Port scanning is disabled for .onion targets.
+    </div>
+
+    <!-- Results -->
+    <div class="results-section" id="resultsSection">
+
+        <!-- Stats row -->
+        <div class="stats-row">
+            <div class="stat-box">
+                <span class="stat-val val-green" id="statRisk">—</span>
+                <span class="stat-lbl">Risk Score</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val val-green" id="statSecure">—</span>
+                <span class="stat-lbl">Secure Headers</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val val-red" id="statMissing">—</span>
+                <span class="stat-lbl">Missing Headers</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val val-yellow" id="statVulns">—</span>
+                <span class="stat-lbl">Vulnerabilities</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val val-cyan" id="statOwasp">—</span>
+                <span class="stat-lbl">OWASP Findings</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val val-green" id="statSslGrade">—</span>
+                <span class="stat-lbl">SSL Grade</span>
+            </div>
+        </div>
+
+        <!-- Chart + Risk level -->
+        <div class="cyber-card">
+            <div class="cyber-card-header">📊 Risk Analysis</div>
+            <div class="cyber-card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <div class="chart-wrap"><canvas id="riskChart"></canvas></div>
+                    </div>
+                    <div class="col-md-7" id="riskDetails" style="font-size:0.85rem; color:#999; padding:16px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Headers -->
+        <div class="cyber-card">
+            <div class="cyber-card-header">🛡 Security Headers</div>
+            <div class="cyber-card-body">
+                <div id="redirectBannerWrap"></div>
+                <table class="hdr-table">
+                    <thead><tr><th>Header</th><th>Value / Detail</th><th>Status</th></tr></thead>
+                    <tbody id="headersTableBody"></tbody>
+                </table>
+                <div style="margin-top:14px;padding:10px 14px;background:#000;border-radius:3px;border:1px solid #0d1a0d;font-size:0.72rem;color:#444;line-height:1.9">
+                    <span style="color:var(--green)">■</span> PRESENT &nbsp;
+                    <span style="color:var(--cyan)">■</span> VIA CSP / Modern equivalent / Disabled ✓ &nbsp;
+                    <span style="color:var(--yellow)">■</span> REPORT-ONLY / Legacy &nbsp;
+                    <span style="color:#666">■</span> N/A &nbsp;
+                    <span style="color:var(--red)">■</span> MISSING
+                </div>
+            </div>
+        </div>
+
+        <!-- SSL/TLS Certificate -->
+        <div class="cyber-card" id="sslCard">
+            <div class="cyber-card-header"> SSL / TLS Certificate Analysis</div>
+            <div class="cyber-card-body" id="sslCardBody">
+                <p style="color:#444;font-size:0.85rem;margin:0">Run a scan to see SSL results.</p>
+            </div>
+        </div>
+
+        <!-- Open Ports -->
+        <div class="cyber-card" id="portsCard">
+            <div class="cyber-card-header"> Open Ports</div>
+            <div class="cyber-card-body">
+                <table class="port-table">
+                    <thead><tr><th>Port</th><th>Service</th></tr></thead>
+                    <tbody id="portsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Vulnerabilities -->
+        <div class="cyber-card">
+            <div class="cyber-card-header">🚨 Vulnerability Scan</div>
+            <div class="cyber-card-body">
+                <ul class="finding-list" id="vulnList"></ul>
+            </div>
+        </div>
+
+        <!-- OWASP -->
+        <div class="cyber-card">
+            <div class="cyber-card-header">⚠ OWASP Top 10 Findings</div>
+            <div class="cyber-card-body">
+                <ul class="finding-list" id="owaspList"></ul>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="cyber-card">
+            <div class="cyber-card-header"> Recommendations</div>
+            <div class="cyber-card-body">
+                <ul class="finding-list" id="recList"></ul>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="action-row">
+            <a href="/download-report" class="btn-action btn-dl">📄 Download PDF</a>
+            <a href="/dashboard"       class="btn-action btn-dash">📊 Dashboard</a>
+            <button onclick="resetScan()"  class="btn-action btn-rescan">↺ New Scan</button>
+        </div>
+
+    </div><!-- /results -->
+
+    <!-- Recent Scans -->
+    {% if history %}
+    <div class="cyber-card" style="margin-top:24px">
+        <div class="cyber-card-header"> Recent Scans</div>
+        <div class="cyber-card-body">
+            <ul class="history-list">
+                {% for item in history %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Results from server-rendered page (if navigated directly to /results/) -->
+    {% if results %}
+    <script>
+    window.addEventListener("DOMContentLoaded", function() {
+        const serverResults = {{ results | tojson }};
+        const serverPorts   = {{ ports | tojson }};
+        const serverVulns   = {{ vulnerabilities | tojson }};
+        const serverOwasp   = {{ owasp_findings | tojson }};
+        const serverRecs    = {{ recommendations | tojson }};
+        renderResults({
+            results:         serverResults,
+            ports:           serverPorts,
+            vulnerabilities: serverVulns,
+            owasp_findings:  serverOwasp,
+            recommendations: serverRecs,
+            secure_count:    {{ secure_count }},
+            missing_count:   {{ missing_count }},
+            is_onion:        {{ is_onion | tojson }}
+        });
+    });
+    </script>
+    {% endif %}
+
+</div><!-- /page-wrap -->
+
+<script>
+// ── Matrix ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById("matrix");
+const ctx    = canvas.getContext("2d");
+const FONT   = 14;
+let drops    = [];
+
+function resizeMatrix() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    drops = Array(Math.floor(canvas.width / FONT)).fill(1);
+}
+resizeMatrix();
+window.addEventListener("resize", resizeMatrix);
+
+const CHARS = "01アイウエオABCDEFGHIJKLMN";
+function drawMatrix() {
+    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#00ff41";
+    ctx.font      = FONT + "px monospace";
+    drops.forEach((y, i) => {
+        ctx.fillText(CHARS[Math.floor(Math.random() * CHARS.length)], i * FONT, y * FONT);
+        if (y * FONT > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+    });
+}
+setInterval(drawMatrix, 40);
+
+// ── Terminal helpers ─────────────────────────────────────────────────────────
+const termBody = document.getElementById("terminalBody");
+
+function addLine(text, cls = "") {
+    const line = document.createElement("div");
+    line.className = "t-line " + cls;
+    line.innerHTML = `<span class="t-prompt">$</span><span class="t-text">${escHtml(text)}</span>`;
+    termBody.appendChild(line);
+    termBody.scrollTop = termBody.scrollHeight;
+    return line;
+}
+
+function escHtml(s) {
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Progress ─────────────────────────────────────────────────────────────────
+const STAGES = ["tor","headers","ports","vulns","owasp","recs","complete"];
+const STAGE_PCT = { tor:8, headers:22, ssl:36, ports:50, vulns:64, owasp:78, recs:90, complete:100 };
+
+function setProgress(stage, label) {
+    const pct = STAGE_PCT[stage] || 0;
+    document.getElementById("progressFill").style.width  = pct + "%";
+    document.getElementById("progressPct").textContent   = pct + "%";
+    document.getElementById("progressLabel").textContent = label.toUpperCase();
+}
+
+// ── Scan state ───────────────────────────────────────────────────────────────
+let riskChartInst = null;
+let collectedData  = {};
+
+function startScan() {
+    const url = document.getElementById("urlInput").value.trim();
+    if (!url) { addLine("ERROR: No target URL provided.", "t-error"); return; }
+
+    // Reset UI
+    termBody.innerHTML = "";
+    document.getElementById("resultsSection").style.display  = "none";
+    document.getElementById("terminalWrap").style.display    = "block";
+    document.getElementById("scanProgress").style.display    = "block";
+    document.getElementById("onionBanner").style.display     = "none";
+    document.getElementById("scanBtn").disabled              = true;
+    collectedData = {};
+
+    addLine(`Initiating scan → ${url}`, "t-info");
+
+    // POST to /start-scan
+    fetch("/start-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body:    "url=" + encodeURIComponent(url)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { addLine("ERROR: " + data.error, "t-error"); return; }
+        listenSSE(data.scan_id);
+    })
+    .catch(err => addLine("Network error: " + err, "t-error"));
+}
+
+function listenSSE(scanId) {
+    const es = new EventSource("/scan-stream/" + scanId);
+
+    es.onmessage = function(e) {
+        const msg = JSON.parse(e.data);
+        handleMessage(msg);
+
+        if (msg.status === "complete") {
+            es.close();
+            finalizeScan(scanId);
+        }
+        if (msg.status === "error") {
+            es.close();
+            document.getElementById("scanBtn").disabled = false;
+        }
+    };
+
+    es.onerror = function() {
+        addLine("Connection lost.", "t-error");
+        es.close();
+        document.getElementById("scanBtn").disabled = false;
+    };
+}
+
+function handleMessage(msg) {
+    const cls = {
+        running:  "t-info",
+        done:     "t-done",
+        error:    "t-error",
+        warning:  "t-warn",
+        skipped:  "t-skip",
+        complete: "t-done"
+    }[msg.status] || "";
+
+    addLine(msg.message, cls);
+    setProgress(msg.stage, msg.message.replace(/[✓✗⚠⟳]/g, "").trim().split("—")[0]);
+
+    // Collect payloads
+    if (msg.payload) Object.assign(collectedData, msg.payload);
+
+    // Tor status badge
+    if (msg.stage === "tor" && msg.status === "done") {
+        document.getElementById("torStatus").innerHTML =
+            `<span style="color:#00ff41;font-size:0.7rem">● TOR ACTIVE</span>`;
+    }
+    if (msg.stage === "tor" && msg.status === "warning") {
+        document.getElementById("torStatus").innerHTML =
+            `<span style="color:#ffd700;font-size:0.7rem">⚠ TOR OFFLINE</span>`;
+    }
+}
+
+function finalizeScan(scanId) {
+    addLine("─────────────────────────────────────────────", "t-skip");
+    addLine("SCAN COMPLETE. Rendering results...", "t-done");
+
+    // Fetch full results from server
+    fetch("/results/" + scanId)
+        .then(r => r.text())
+        .then(() => {
+            renderResults(collectedData);
+            document.getElementById("scanBtn").disabled = false;
+            document.getElementById("scanProgress").style.display = "none";
+        });
+}
+
+// ── Render results into the page ─────────────────────────────────────────────
+function renderResults(data) {
+    const results         = data.results         || {};
+    const ports           = data.ports           || [];
+    const vulnerabilities = data.vulnerabilities || [];
+    const owasp_findings  = data.owasp_findings  || [];
+    const recommendations = data.recommendations || [];
+    const secure_count    = data.secure_count    ?? 0;
+    const missing_count   = data.missing_count   ?? 0;
+    const is_onion        = data.is_onion        || false;
+
+    // Onion banner
+    if (is_onion) document.getElementById("onionBanner").style.display = "block";
+
+    // Stats
+    document.getElementById("statRisk").textContent    = results["Risk Score"] || "—";
+    document.getElementById("statSecure").textContent  = secure_count;
+    document.getElementById("statMissing").textContent = missing_count;
+
+    const vulnIssues  = vulnerabilities.filter(v => !v.startsWith("✓")).length;
+    const owaspIssues = owasp_findings.filter(o => !o.startsWith("✓")).length;
+    document.getElementById("statVulns").textContent  = vulnIssues;
+    document.getElementById("statOwasp").textContent  = owaspIssues;
+
+    // SSL grade stat
+    const sslData  = data.ssl || {};
+    const sslGrade = sslData.grade || (sslData.supported === false ? "N/A" : "—");
+    const sslEl    = document.getElementById("statSslGrade");
+    sslEl.textContent = sslGrade;
+    sslEl.className   = "stat-val " + (
+        sslGrade === "A" ? "val-green" :
+        sslGrade === "B" ? "val-cyan"  :
+        sslGrade === "F" ? "val-red"   :
+        sslGrade === "C" ? "val-yellow": "val-green"
+    );
+
+    renderSSL(sslData);
+
+    // Risk color
+    const riskLevel = results["Risk Level"] || "";
+    const riskEl    = document.getElementById("statRisk");
+    riskEl.className = "stat-val " + (riskLevel === "High" ? "val-red" : riskLevel === "Medium" ? "val-yellow" : "val-green");
+
+    // Chart
+    if (riskChartInst) riskChartInst.destroy();
+    const total = secure_count + missing_count || 1;
+    riskChartInst = new Chart(document.getElementById("riskChart"), {
+        type: "doughnut",
+        data: {
+            labels: ["Secure", "Missing"],
+            datasets: [{
+                data: [secure_count, missing_count],
+                backgroundColor: ["rgba(0,255,65,0.7)", "rgba(255,60,60,0.7)"],
+                borderColor:     ["#00ff41", "#ff3c3c"],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true, cutout: "72%",
+            plugins: {
+                legend: { labels: { color: "#aaa", font: { family: "Share Tech Mono" } } }
+            }
+        }
+    });
+
+    // Risk detail text
+    document.getElementById("riskDetails").innerHTML = `
+        <div style="margin-bottom:10px">
+            <span style="color:#666;font-size:0.72rem;letter-spacing:2px">RISK LEVEL</span><br>
+            <span style="font-family:'Orbitron',sans-serif;font-size:1.4rem;font-weight:900"
+                  class="${riskLevel==='High'?'val-red':riskLevel==='Medium'?'val-yellow':'val-green'}">
+                ${riskLevel || "—"}
+            </span>
+        </div>
+        <div style="color:#666;font-size:0.8rem;line-height:1.8">
+            Secure Headers: <span style="color:#00ff41">${secure_count}</span><br>
+            Missing Headers: <span style="color:#ff3c3c">${missing_count}</span><br>
+            Total Checked: <span style="color:#aaa">${total}</span>
+        </div>`;
+
+    // ── Headers table — redirect notice + smart status tags ──────────────────
+    const notes       = results["_notes"] || {};
+    const redirectUrl = results["_final_url"] || "";
+    const redirectNote= results["_redirect_note"] || "";
+
+    const hdrCardBody = document.getElementById("headersTableBody").closest(".cyber-card-body");
+
+    // Show redirect notice above table if URL was redirected
+    let redirectBanner = hdrCardBody.querySelector(".redirect-notice");
+    if (redirectNote) {
+        if (!redirectBanner) {
+            redirectBanner = document.createElement("div");
+            redirectBanner.className = "redirect-notice";
+            hdrCardBody.insertBefore(redirectBanner, hdrCardBody.firstChild);
+        }
+        redirectBanner.innerHTML = `⟳ <strong>Redirect detected</strong> — Headers read from final destination:<br>
+            <span style="color:#aaa;font-size:0.76rem">${escHtml(redirectNote)}</span>`;
+    }
+
+    const headerKeys = [
+        "Content-Security-Policy","X-Frame-Options","Strict-Transport-Security",
+        "X-Content-Type-Options","Referrer-Policy","Permissions-Policy",
+        "X-XSS-Protection","Cross-Origin-Opener-Policy"
+    ];
+
+    // Header weight labels for tooltip
+    const headerWeights = {
+        "Content-Security-Policy":   20,
+        "X-Frame-Options":           15,
+        "Strict-Transport-Security": 20,
+        "X-Content-Type-Options":    10,
+        "Referrer-Policy":           10,
+        "Permissions-Policy":        10,
+        "X-XSS-Protection":          5,
+        "Cross-Origin-Opener-Policy":10,
+    };
+
+    const hdrBody = document.getElementById("headersTableBody");
+    hdrBody.innerHTML = "";
+
+    for (const key of headerKeys) {
+        if (!(key in results)) continue;
+        const val     = results[key];
+        const note    = notes[key] || "";
+        const weight  = headerWeights[key] || 10;
+
+        // Determine status tag
+        let statusTag = "";
+        let valColor  = "#ccc";
+        let displayVal = val;
+
+        if (val === "Missing") {
+            statusTag  = `<span class="tag-missing">MISSING</span>
+                          <span style="color:#ff3c3c;font-size:0.68rem;margin-left:6px">−${weight}pts</span>`;
+            valColor   = "#333";
+            displayVal = "—";
+        } else if (note === "VIA-CSP") {
+            statusTag  = `<span class="tag-modern">VIA CSP</span>`;
+            valColor   = "#00d4ff";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        } else if (note === "REPORT-ONLY") {
+            statusTag  = `<span class="tag-warn">REPORT-ONLY</span>`;
+            valColor   = "#ffd700";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        } else if (note === "HTTP-ONLY") {
+            statusTag  = `<span class="tag-na">N/A (HTTP)</span>`;
+            valColor   = "#555";
+            displayVal = val;
+        } else if (note === "HANDLED-BY-CSP") {
+            statusTag  = `<span class="tag-modern">HANDLED BY CSP</span>`;
+            valColor   = "#00d4ff";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        } else if (note === "DISABLED") {
+            // X-XSS-Protection: 0 — intentionally disabled, correct modern practice
+            statusTag  = `<span class="tag-modern">DISABLED ✓</span>
+                          <span style="color:#00d4ff;font-size:0.68rem;margin-left:6px">correct modern setting</span>`;
+            valColor   = "#00d4ff";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        } else if (note === "LEGACY") {
+            // X-XSS-Protection: 1 or 1; mode=block — old, not recommended
+            statusTag  = `<span class="tag-warn">LEGACY</span>
+                          <span style="color:#ffd700;font-size:0.68rem;margin-left:6px">consider removing</span>`;
+            valColor   = "#ffd700";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        } else {
+            statusTag  = `<span class="tag-present">PRESENT</span>`;
+            valColor   = "#7fff7f";
+            displayVal = val.length > 70 ? val.substring(0,70)+"…" : val;
+        }
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="color:#aaa;white-space:nowrap">${escHtml(key)}</td>
+            <td style="color:${valColor};font-size:0.78rem;word-break:break-all">${escHtml(displayVal)}</td>
+            <td style="white-space:nowrap">${statusTag}</td>`;
+        hdrBody.appendChild(tr);
+    }
+
+    // Risk score row
+    const rtr = document.createElement("tr");
+    rtr.innerHTML = `
+        <td style="color:#aaa">Risk Score</td>
+        <td style="color:#aaa">${escHtml(results["Risk Score"] || "—")}</td>
+        <td><span class="tag-risk-${riskLevel.toLowerCase()}">${escHtml(riskLevel)}</span></td>`;
+    hdrBody.appendChild(rtr);
+
+    // Ports
+    const portsBody = document.getElementById("portsTableBody");
+    portsBody.innerHTML = "";
+    if (ports.length === 0) {
+        document.getElementById("portsCard").querySelector(".cyber-card-body").innerHTML =
+            '<p style="color:#666;font-size:0.85rem;margin:0">No open ports found (or scan skipped for .onion target).</p>';
+    } else {
+        ports.forEach(p => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td class="port-num">${p.port}</td><td style="color:#aaa">${p.service}</td>`;
+            portsBody.appendChild(tr);
+        });
+    }
+
+    // Vulns
+    const vulnList = document.getElementById("vulnList");
+    vulnList.innerHTML = "";
+    vulnerabilities.forEach(v => {
+        const li = document.createElement("li");
+        li.className = v.startsWith("✓") ? "vuln-ok"
+                     : v.startsWith("[INFO]") ? "vuln-info"
+                     : v.startsWith("[XSS]") || v.startsWith("[SQLi]") || v.startsWith("[EXPOSURE]") ? "vuln-danger"
+                     : "vuln-warn";
+        li.textContent = v;
+        vulnList.appendChild(li);
+    });
+
+    // OWASP
+    const owaspList = document.getElementById("owaspList");
+    owaspList.innerHTML = "";
+    owasp_findings.forEach(o => {
+        const li = document.createElement("li");
+        li.className = o.startsWith("✓") ? "vuln-ok" : "vuln-warn";
+        li.textContent = o;
+        owaspList.appendChild(li);
+    });
+
+    // Recommendations
+    const recList = document.getElementById("recList");
+    recList.innerHTML = "";
+    recommendations.forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = r;
+        recList.appendChild(li);
+    });
+
+    // Show results
+    document.getElementById("resultsSection").style.display = "block";
+    document.getElementById("resultsSection").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderSSL(ssl) {
+    const body = document.getElementById("sslCardBody");
+    if (!ssl || Object.keys(ssl).length === 0) {
+        body.innerHTML = '<p style="color:#444;font-size:0.85rem;margin:0">No SSL data available.</p>';
+        return;
+    }
+
+    // Not supported (onion or connection refused)
+    if (!ssl.supported) {
+        body.innerHTML = `<p style="color:#666;font-size:0.85rem;margin:0">
+            ⟳ ${ssl.reason || ssl.error || "SSL not available for this target."}</p>`;
+        return;
+    }
+
+    // Error (verification failed etc.)
+    if (ssl.error && !ssl.grade) {
+        body.innerHTML = `<p style="color:#ff3c3c;font-size:0.85rem;margin:0">✗ ${ssl.error}</p>`;
+        return;
+    }
+
+    const gradeColor = {A:"#00ff41", B:"#00d4ff", C:"#ffd700", F:"#ff3c3c"}[ssl.grade] || "#aaa";
+
+    const issueHtml = (ssl.issues && ssl.issues.length)
+        ? ssl.issues.map(i => `<li style="color:#ffd700">⚠ ${escHtml(i)}</li>`).join("")
+        : `<li style="color:#00ff41">✓ No certificate issues detected</li>`;
+
+    const sanHtml = (ssl.san_domains && ssl.san_domains.length)
+        ? ssl.san_domains.slice(0, 8).map(d => `<span class="tag-present" style="margin:2px;display:inline-block">${escHtml(d)}</span>`).join(" ")
+          + (ssl.san_domains.length > 8 ? `<span style="color:#666"> +${ssl.san_domains.length - 8} more</span>` : "")
+        : '<span style="color:#444">None</span>';
+
+    const expiryColor = ssl.is_expired ? "#ff3c3c"
+                      : ssl.is_expiring_soon ? "#ffd700"
+                      : "#00ff41";
+
+    body.innerHTML = `
+        <div class="row">
+            <!-- Grade badge -->
+            <div class="col-md-2 text-center" style="padding:16px 8px">
+                <div style="
+                    font-family:'Orbitron',sans-serif;
+                    font-size:3.5rem; font-weight:900; line-height:1;
+                    color:${gradeColor};
+                    text-shadow: 0 0 20px ${gradeColor};
+                ">${ssl.grade || "?"}</div>
+                <div style="font-size:0.68rem;color:#555;letter-spacing:2px;margin-top:6px">SSL GRADE</div>
+            </div>
+
+            <!-- Details grid -->
+            <div class="col-md-10">
+                <table class="hdr-table">
+                    <tbody>
+                        <tr>
+                            <td style="color:#666;width:38%">Common Name</td>
+                            <td style="color:#ccc">${escHtml(ssl.common_name || "—")}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Organization</td>
+                            <td style="color:#ccc">${escHtml(ssl.organization || "—")}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Issued By</td>
+                            <td style="color:#ccc">${escHtml(ssl.issuer_org || ssl.issuer_cn || "—")}
+                                ${ssl.is_self_signed
+                                    ? '<span class="tag-missing" style="margin-left:8px">SELF-SIGNED</span>'
+                                    : '<span class="tag-present" style="margin-left:8px">CA-SIGNED</span>'}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Valid From</td>
+                            <td style="color:#aaa">${escHtml(ssl.valid_from || "—")}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Valid Until</td>
+                            <td style="color:${expiryColor}">
+                                ${escHtml(ssl.valid_until || "—")}
+                                &nbsp;
+                                <span style="font-size:0.78rem">(${ssl.is_expired ? "EXPIRED" : ssl.days_remaining + " days left"})</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">TLS Version</td>
+                            <td>
+                                <span class="${["TLSv1.2","TLSv1.3"].includes(ssl.tls_version) ? "tag-present" : "tag-missing"}">
+                                    ${escHtml(ssl.tls_version || "—")}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Cipher Suite</td>
+                            <td style="color:#aaa;font-size:0.8rem">
+                                ${escHtml(ssl.cipher_name || "—")}
+                                &nbsp;
+                                <span style="color:${ssl.cipher_rating==="Strong"?"#00ff41":ssl.cipher_rating==="Adequate"?"#ffd700":"#ff3c3c"};font-size:0.75rem">
+                                    ${ssl.cipher_bits ? ssl.cipher_bits + "-bit" : ""} ${escHtml(ssl.cipher_rating || "")}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color:#666">Alt Names (SAN)</td>
+                            <td style="font-size:0.78rem;line-height:1.8">${sanHtml}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Issues -->
+                <div style="margin-top:14px;padding:10px 14px;background:#000;border-radius:3px;border:1px solid #0d1a0d">
+                    <div style="font-size:0.7rem;color:#444;letter-spacing:2px;margin-bottom:8px">CERTIFICATE ISSUES</div>
+                    <ul class="finding-list" style="margin:0">${issueHtml}</ul>
+                </div>
+            </div>
+        </div>`;
+}
+
+function resetScan() {
+    document.getElementById("resultsSection").style.display  = "none";
+    document.getElementById("terminalWrap").style.display    = "none";
+    document.getElementById("scanProgress").style.display    = "none";
+    document.getElementById("onionBanner").style.display     = "none";
+    document.getElementById("urlInput").value                = "";
+    document.getElementById("urlInput").focus();
+    document.getElementById("torStatus").innerHTML           = "";
+}
+
+// Enter key triggers scan
+document.getElementById("urlInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") startScan();
+});
+</script>
+</body>
+</html>
