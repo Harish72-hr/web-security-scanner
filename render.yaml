@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: onion-website-scanner
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
