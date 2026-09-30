@@ -2,9 +2,8 @@ import nmap
 
 
 def scan_ports(target):
-    nm = nmap.PortScanner()
-
     try:
+        nm = nmap.PortScanner()
         nm.scan(target, arguments='-F')
 
         ports = []

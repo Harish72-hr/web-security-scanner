@@ -105,7 +105,9 @@ def run_scan(scan_id: str, url: str):
         else:
             push("ports", "Running Nmap port scan...", "running")
             ports = scan_ports(hostname)
-            if ports and isinstance(ports[0].get("port"), int):
+            if ports and ports[0].get("port") == "Error":
+                push("ports", f"✗ Port scan failed: {ports[0].get('service', 'Unknown error')}", "error")
+            elif ports and isinstance(ports[0].get("port"), int):
                 push("ports",
                      f"✓ Port scan complete — {len(ports)} open port(s) found",
                      "done", {"ports": ports})
